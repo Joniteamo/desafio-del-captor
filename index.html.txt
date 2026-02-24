@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Desafío del Captor</title>
+<style>
+html,body{
+    margin:0;
+    padding:0;
+    overflow:hidden;
+    background:black;
+    font-family:Arial, sans-serif;
+}
+canvas{ display:block; }
+
+#startScreen{
+    position:absolute;
+    width:100%;
+    height:100%;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    background:linear-gradient(180deg,#12002b,#000);
+    color:white;
+    z-index:10;
+}
+button{
+    padding:20px 50px;
+    font-size:28px;
+    background:#ff00cc;
+    border:none;
+    color:white;
+    cursor:pointer;
+    border-radius:12px;
+}
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1 style="font-size:50px;">Desafío del Captor</h1>
+    <button onclick="startGame()">COMENZAR</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas(){
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+let gameStarted = false;
+let gameWon = false;
+let victoryScale = 0.1;
+
+let gravity = 1;
+let heartsCollected = 0;
+let maxHearts = 14;
+let cameraX = 0;
+let shake = 0;
+
+let captorImg = new Image();
+captorImg.src = "captor.png";
+
+let heartImg = new Image();
+heartImg.src = "corazon.png";
+
+let portalImg = new Image();
+portalImg.src = "portal.png";
+
+let victoryImg = new Image();
+victoryImg.src = "victoria.png";
+
+let player = {
+    x:200,
+    y:0,
+    width:180,
+    height:260,
+    dy:0,
+    jumping:false,
+    doubleJump:false
+};
+
+let spikes = [];
+let hearts = [];
+
+function createLevel(){
+    for(let i=800;i<9000;i+=350){
+        spikes.push({x:i,y:canvas.height-150,width:50,height:50});
+    }
+    for(let i=1000;i<8500;i+=500){
+        hearts.push({x:i,y:canvas.height-350,collected:false});
+    }
+}
+createLevel();
+
+function startGame(){
+    document.getElementById("startScreen").style.display="none";
+    gameStarted = true;
+    player.y = canvas.height-260;
+    update();
+}
+
+function update(){
+    if(!gameStarted) return;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    if(gameWon){
+        drawVictory();
+        requestAnimationFrame(update);
+        return;
+    }
+
+    ctx.save();
+
+    if(shake>0){
+        ctx.translate(
+            Math.random()*shake - shake/2,
+            Math.random()*shake - shake/2
+        );
+        shake -= 0.5;
+    }
+
+    drawBackground();
+
+    player.dy += gravity;
+    player.y += player.dy;
+
+    if(player.y > canvas.height-player.height){
+        player.y = canvas.height-player.height;
+        player.jumping = false;
+        player.doubleJump = false;
+    }
+
+    cameraX += 6;
+
+    drawPlayer();
+    drawSpikes();
+    drawHearts();
+    drawPortal();
+    drawHUD();
+
+    checkCollision();
+
+    ctx.restore();
+    requestAnimationFrame(update);
+}
+
+function drawBackground(){
+    let gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+    gradient.addColorStop(0,"#1a0033");
+    gradient.addColorStop(1,"#000");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function drawPlayer(){
+    ctx.drawImage(captorImg, player.x, player.y, player.width, player.height);
+}
+
+function drawSpikes(){
+    ctx.fillStyle="#ff0044";
+    spikes.forEach(s=>{
+        ctx.fillRect(s.x - cameraX, s.y, s.width, s.height);
+    });
+}
+
+function drawHearts(){
+    hearts.forEach(h=>{
+        if(!h.collected){
+            ctx.drawImage(heartImg, h.x - cameraX, h.y,60,60);
+        }
+    });
+}
+
+function drawPortal(){
+    if(heartsCollected >= maxHearts){
+        ctx.drawImage(portalImg, 9200 - cameraX,canvas.height-300,200,200);
+    }
+}
+
+function drawHUD(){
+    ctx.fillStyle="white";
+    ctx.font="30px Arial";
+    ctx.fillText("❤️ "+heartsCollected+" / 14", 30,50);
+}
+
+function checkCollision(){
+    spikes.forEach(s=>{
+        if(player.x < s.x - cameraX + s.width &&
+           player.x + player.width > s.x - cameraX &&
+           player.y < s.y + s.height &&
+           player.y + player.height > s.y){
+               resetGame();
+        }
+    });
+
+    hearts.forEach(h=>{
+        if(!h.collected &&
+           player.x < h.x - cameraX + 60 &&
+           player.x + player.width > h.x - cameraX &&
+           player.y < h.y + 60 &&
+           player.y + player.height > h.y){
+               h.collected = true;
+               heartsCollected++;
+        }
+    });
+
+    if(heartsCollected >= maxHearts){
+        if(player.x + player.width > 9200 - cameraX){
+            gameWon = true;
+        }
+    }
+}
+
+function resetGame(){
+    shake = 20;
+    player.dy = -20;
+    cameraX = 0;
+    heartsCollected = 0;
+    hearts.forEach(h=>h.collected=false);
+}
+
+function drawVictory(){
+    ctx.fillStyle="black";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    if(victoryScale < 1){
+        victoryScale += 0.01;
+    }
+
+    let imgWidth = victoryImg.width * victoryScale;
+    let imgHeight = victoryImg.height * victoryScale;
+
+    ctx.drawImage(
+        victoryImg,
+        canvas.width/2 - imgWidth/2,
+        canvas.height/2 - imgHeight/2 - 50,
+        imgWidth,
+        imgHeight
+    );
+
+    ctx.fillStyle="white";
+    ctx.font = (60 * victoryScale) + "px Arial Black";
+    ctx.textAlign="center";
+    ctx.fillText(
+        "TE AMO DAVID",
+        canvas.width/2,
+        canvas.height/2 + imgHeight/2 + 40
+    );
+}
+
+document.addEventListener("keydown", e=>{
+    if(e.code === "Space"){
+        if(!player.jumping){
+            player.dy = -22;
+            player.jumping = true;
+        }else if(!player.doubleJump){
+            player.dy = -20;
+            player.doubleJump = true;
+        }
+    }
+});
+</script>
+
+</body>
+</html>
