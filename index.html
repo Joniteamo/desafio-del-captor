@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Desafio-Captor</title>
-
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
-
 <style>
 body{
     margin:0;
@@ -20,7 +18,6 @@ canvas{
 }
 </style>
 </head>
-
 <body>
 <canvas id="game"></canvas>
 
@@ -28,85 +25,97 @@ canvas{
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-canvas.width = 1100;
-canvas.height = 550;
+canvas.width = 1200;
+canvas.height = 600;
 
-const FLOOR_Y = canvas.height - 90;
+const FLOOR_Y = canvas.height - 100;
 
-const COLORS = {
-    bg:"#0f0f1a",
-    player:"#00e0ff",
-    obstacle:"#ff2e63",
-    floor:"#1f2235"
-};
+// ============================
+// CONFIGURACIÓN BALANCEADA
+// ============================
 
-let speed = 8;
+const speed = 11;           // velocidad horizontal
+const gravity = 1.3;        // gravedad firme
+const jumpForce = -24;      // salto alto real
+const spikeWidth = 70;
+const spikeHeight = 70;
+
+// ============================
 
 let player = {
-    x:200,
-    y:FLOOR_Y-55,
-    width:55,
-    height:55,
-    velocityY:0,
-    gravity:0.9,
-    jumpForce:-18,
-    onGround:true,
-    rotation:0
+    x: 250,
+    y: FLOOR_Y - 70,
+    width: 70,
+    height: 70,
+    velocityY: 0,
+    onGround: true,
+    rotation: 0
 };
 
 let obstacles = [];
-let spawnTimer = 0;
+let distanceCounter = 0;
+let nextSpawnDistance = 450;
 
 let gameOver = false;
 let deathTimer = 0;
 
-document.addEventListener("keydown",jump);
-document.addEventListener("mousedown",jump);
+// ============================
+// INPUT
+// ============================
+
+document.addEventListener("keydown", jump);
+document.addEventListener("mousedown", jump);
 
 function jump(){
     if(player.onGround && !gameOver){
-        player.velocityY = player.jumpForce;
+        player.velocityY = jumpForce;
         player.onGround = false;
     }
 }
 
-function spawnObstacle(){
+// ============================
+// SPAWN INTELIGENTE
+// ============================
 
-    let heights = [60, 80, 120];
-    let height = heights[Math.floor(Math.random()*heights.length)];
+function spawnSpike(){
 
-    let obstacle = {
+    obstacles.push({
         x: canvas.width + 50,
-        y: FLOOR_Y - height,
-        width: 60,
-        height: height
-    };
+        y: FLOOR_Y - spikeHeight,
+        width: spikeWidth,
+        height: spikeHeight
+    });
 
-    obstacles.push(obstacle);
-
-    // 30% probabilidad doble
-    if(Math.random() < 0.3){
+    // 30% doble spike con separación correcta
+    if(Math.random() < 0.30){
         obstacles.push({
-            x: obstacle.x + 90,
-            y: FLOOR_Y - 60,
-            width: 60,
-            height: 60
+            x: canvas.width + 50 + 140,
+            y: FLOOR_Y - spikeHeight,
+            width: spikeWidth,
+            height: spikeHeight
         });
     }
+
+    // nueva distancia calculada en espacio real
+    nextSpawnDistance = 420 + Math.random() * 250;
 }
+
+// ============================
+// UPDATE
+// ============================
 
 function update(delta){
 
     if(gameOver){
         deathTimer += delta;
-        if(deathTimer > 25){
+        if(deathTimer > 30){
             resetGame();
         }
         return;
     }
 
-    // física
-    player.velocityY += player.gravity * delta;
+    // Física vertical
+    player.velocityY += gravity * delta;
     player.y += player.velocityY * delta;
 
     if(player.y >= FLOOR_Y - player.height){
@@ -116,27 +125,19 @@ function update(delta){
     }
 
     if(!player.onGround){
-        player.rotation += 0.15 * delta;
+        player.rotation += 0.18 * delta;
     } else {
         player.rotation = 0;
     }
 
-    // spawn dinámico estilo GD
-    spawnTimer += delta;
-
-    if(spawnTimer > 65 + Math.random()*50){
-        spawnObstacle();
-        spawnTimer = 0;
-    }
-
-    // mover obstáculos
+    // Movimiento obstáculos
     for(let obs of obstacles){
         obs.x -= speed * delta;
 
-        // colisión
+        // Colisión precisa
         if(
-            player.x < obs.x + obs.width &&
-            player.x + player.width > obs.x &&
+            player.x < obs.x + obs.width - 8 &&
+            player.x + player.width - 8 > obs.x &&
             player.y < obs.y + obs.height &&
             player.y + player.height > obs.y
         ){
@@ -144,37 +145,40 @@ function update(delta){
         }
     }
 
-    // eliminar los que salen
-    obstacles = obstacles.filter(o => o.x + o.width > -50);
+    obstacles = obstacles.filter(o => o.x + o.width > -100);
+
+    // Spawn basado en distancia real recorrida
+    distanceCounter += speed * delta;
+
+    if(distanceCounter > nextSpawnDistance){
+        spawnSpike();
+        distanceCounter = 0;
+    }
 }
 
+// ============================
+// DRAW
+// ============================
+
 function drawBackground(){
-    ctx.fillStyle = COLORS.bg;
+    ctx.fillStyle = "#0f0f1a";
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    ctx.strokeStyle = "rgba(255,255,255,0.04)";
-    for(let i=0;i<canvas.width;i+=60){
-        ctx.beginPath();
-        ctx.moveTo(i,0);
-        ctx.lineTo(i,canvas.height);
-        ctx.stroke();
-    }
-
-    ctx.fillStyle = COLORS.floor;
-    ctx.fillRect(0,FLOOR_Y,canvas.width,100);
+    ctx.fillStyle = "#1f2235";
+    ctx.fillRect(0,FLOOR_Y,canvas.width,120);
 }
 
 function drawPlayer(){
     ctx.save();
     ctx.translate(player.x + player.width/2, player.y + player.height/2);
     ctx.rotate(player.rotation);
-    ctx.fillStyle = COLORS.player;
+    ctx.fillStyle = "#00e0ff";
     ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
     ctx.restore();
 }
 
-function drawObstacles(){
-    ctx.fillStyle = COLORS.obstacle;
+function drawSpikes(){
+    ctx.fillStyle = "#ff2e63";
 
     for(let obs of obstacles){
         ctx.beginPath();
@@ -186,33 +190,35 @@ function drawObstacles(){
     }
 }
 
-function drawUI(){
-    ctx.fillStyle="white";
-    ctx.font="26px Orbitron";
-    ctx.fillText("DESAFIO CAPTOR",30,40);
-}
-
 function draw(){
     drawBackground();
-    drawObstacles();
+    drawSpikes();
     drawPlayer();
-    drawUI();
 }
 
+// ============================
+// RESET
+// ============================
+
 function resetGame(){
-    obstacles=[];
+    obstacles = [];
+    distanceCounter = 0;
     player.y = FLOOR_Y - player.height;
     player.velocityY = 0;
     player.rotation = 0;
-    gameOver=false;
-    deathTimer=0;
+    gameOver = false;
+    deathTimer = 0;
 }
 
-let lastTime=0;
+// ============================
+// LOOP FLUIDO
+// ============================
+
+let lastTime = 0;
 
 function loop(timestamp){
-    let delta=(timestamp-lastTime)/16.67;
-    lastTime=timestamp;
+    let delta = (timestamp - lastTime) / 16.67;
+    lastTime = timestamp;
 
     update(delta);
     draw();
@@ -221,6 +227,7 @@ function loop(timestamp){
 }
 
 requestAnimationFrame(loop);
+
 </script>
 </body>
 </html>
