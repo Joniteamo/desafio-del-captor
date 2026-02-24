@@ -5,16 +5,8 @@
 <title>Desafio-Captor</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
 <style>
-body{
-    margin:0;
-    background:#0f0f1a;
-    overflow:hidden;
-}
-canvas{
-    display:block;
-    margin:auto;
-    background:#0f0f1a;
-}
+body{margin:0;overflow:hidden;background:#000;}
+canvas{display:block;margin:auto;}
 </style>
 </head>
 <body>
@@ -28,9 +20,14 @@ canvas.width = 1200;
 canvas.height = 600;
 
 const FLOOR_Y = canvas.height - 100;
-const SPEED = 8;
+const SPEED = 7;
 const GRAVITY = 1.2;
 const JUMP_FORCE = -22;
+
+let heartsCollected = 0;
+let cameraX = 0;
+let gameOver = false;
+let deathTimer = 0;
 
 let player = {
     x: 250,
@@ -42,40 +39,24 @@ let player = {
     rotation: 0
 };
 
-// NIVEL DISEÑADO (posiciones fijas)
-let level = [
-    {x: 900},
-    {x: 1300},
-    {x: 1700},
-    {x: 2000},
-    {x: 2400},        // doble spike
-    {x: 2500},
-    {x: 3000},
-    {x: 3600},
-    {x: 4200}
-];
+let levelSpikes = [1000,1700,2500,3300,4200];
+let levelHearts = [1400,2900,3900];
 
-let obstacles = [];
+let spikes = [];
+let hearts = [];
 
 function buildLevel(){
-    for(let obj of level){
-        obstacles.push({
-            x: obj.x,
-            y: FLOOR_Y - 70,
-            width: 70,
-            height: 70
-        });
+    for(let x of levelSpikes){
+        spikes.push({x:x,y:FLOOR_Y-70,width:70,height:70});
+    }
+    for(let x of levelHearts){
+        hearts.push({x:x,y:FLOOR_Y-170,size:45,collected:false,anim:0});
     }
 }
-
 buildLevel();
 
-let cameraX = 0;
-let gameOver = false;
-let deathTimer = 0;
-
-document.addEventListener("keydown", jump);
-document.addEventListener("mousedown", jump);
+document.addEventListener("keydown",jump);
+document.addEventListener("mousedown",jump);
 
 function jump(){
     if(player.onGround && !gameOver){
@@ -88,15 +69,12 @@ function update(delta){
 
     if(gameOver){
         deathTimer += delta;
-        if(deathTimer > 30){
-            resetGame();
-        }
+        if(deathTimer > 30) resetGame();
         return;
     }
 
     cameraX += SPEED * delta;
 
-    // Física
     player.velocityY += GRAVITY * delta;
     player.y += player.velocityY * delta;
 
@@ -107,62 +85,136 @@ function update(delta){
     }
 
     if(!player.onGround){
-        player.rotation += 0.18 * delta;
+        player.rotation += 0.2 * delta;
     } else {
         player.rotation = 0;
     }
 
-    // Colisión
-    for(let obs of obstacles){
-        let screenX = obs.x - cameraX;
+    // SPIKES
+    for(let spike of spikes){
+        let sx = spike.x - cameraX;
 
         if(
-            player.x < screenX + obs.width - 10 &&
-            player.x + player.width - 10 > screenX &&
-            player.y < obs.y + obs.height &&
-            player.y + player.height > obs.y
+            player.x < sx + spike.width - 10 &&
+            player.x + player.width - 10 > sx &&
+            player.y < spike.y + spike.height &&
+            player.y + player.height > spike.y
         ){
             gameOver = true;
+        }
+    }
+
+    // HEARTS
+    for(let heart of hearts){
+        heart.anim += 0.05 * delta;
+
+        let hx = heart.x - cameraX;
+        let floatY = heart.y + Math.sin(heart.anim)*8;
+
+        if(!heart.collected &&
+            player.x < hx + heart.size &&
+            player.x + player.width > hx &&
+            player.y < floatY + heart.size &&
+            player.y + player.height > floatY
+        ){
+            heart.collected = true;
+            heartsCollected++;
         }
     }
 }
 
 function drawBackground(){
-    ctx.fillStyle = "#0f0f1a";
+
+    let progress = cameraX / 5000;
+    let topColor = `hsl(${220 + progress*120}, 70%, 40%)`;
+    let bottomColor = `hsl(${260 + progress*120}, 60%, 15%)`;
+
+    let gradient = ctx.createLinearGradient(0,0,0,canvas.height);
+    gradient.addColorStop(0,topColor);
+    gradient.addColorStop(1,bottomColor);
+
+    ctx.fillStyle = gradient;
     ctx.fillRect(0,0,canvas.width,canvas.height);
 
-    ctx.fillStyle = "#1f2235";
+    // línea brillante piso
+    ctx.shadowColor = "#00ffff";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = "#00ffff";
+    ctx.fillRect(0,FLOOR_Y,canvas.width,4);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = "#111827";
     ctx.fillRect(0,FLOOR_Y,canvas.width,120);
 }
 
 function drawPlayer(){
+
     ctx.save();
     ctx.translate(player.x + player.width/2, player.y + player.height/2);
     ctx.rotate(player.rotation);
+
+    ctx.shadowColor = "#00ffff";
+    ctx.shadowBlur = 15;
+
     ctx.fillStyle = "#00e0ff";
-    ctx.fillRect(-player.width/2,-player.height/2,player.width,player.height);
+    ctx.fillRect(-35,-35,70,70);
+
+    ctx.fillStyle = "#001f3f";
+    ctx.fillRect(-15,-15,30,30);
+
+    ctx.shadowBlur = 0;
     ctx.restore();
 }
 
-function drawObstacles(){
+function drawSpikes(){
     ctx.fillStyle = "#ff2e63";
-
-    for(let obs of obstacles){
-        let screenX = obs.x - cameraX;
+    for(let spike of spikes){
+        let sx = spike.x - cameraX;
 
         ctx.beginPath();
-        ctx.moveTo(screenX, obs.y + obs.height);
-        ctx.lineTo(screenX + obs.width/2, obs.y);
-        ctx.lineTo(screenX + obs.width, obs.y + obs.height);
+        ctx.moveTo(sx, spike.y + spike.height);
+        ctx.lineTo(sx + spike.width/2, spike.y);
+        ctx.lineTo(sx + spike.width, spike.y + spike.height);
         ctx.closePath();
         ctx.fill();
     }
 }
 
+function drawHearts(){
+
+    for(let heart of hearts){
+        if(heart.collected) continue;
+
+        let hx = heart.x - cameraX;
+        let floatY = heart.y + Math.sin(heart.anim)*8;
+        let s = heart.size;
+
+        ctx.shadowColor = "red";
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = "red";
+
+        ctx.beginPath();
+        ctx.moveTo(hx + s/2, floatY + s);
+        ctx.bezierCurveTo(hx + s*1.2, floatY + s*0.6, hx + s*0.8, floatY - s*0.3, hx + s/2, floatY + s*0.2);
+        ctx.bezierCurveTo(hx + s*0.2, floatY - s*0.3, hx - s*0.2, floatY + s*0.6, hx + s/2, floatY + s);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+    }
+}
+
+function drawUI(){
+    ctx.fillStyle="white";
+    ctx.font="28px Orbitron";
+    ctx.fillText("Corazones: " + heartsCollected, 40, 50);
+}
+
 function draw(){
     drawBackground();
-    drawObstacles();
+    drawSpikes();
+    drawHearts();
     drawPlayer();
+    drawUI();
 }
 
 function resetGame(){
@@ -172,12 +224,18 @@ function resetGame(){
     player.rotation = 0;
     gameOver = false;
     deathTimer = 0;
+    heartsCollected = 0;
+
+    for(let heart of hearts){
+        heart.collected = false;
+        heart.anim = 0;
+    }
 }
 
 let lastTime = 0;
 
 function loop(timestamp){
-    let delta = (timestamp - lastTime) / 16.67;
+    let delta = (timestamp - lastTime)/16.67;
     lastTime = timestamp;
 
     update(delta);
@@ -185,7 +243,6 @@ function loop(timestamp){
 
     requestAnimationFrame(loop);
 }
-
 requestAnimationFrame(loop);
 </script>
 </body>
