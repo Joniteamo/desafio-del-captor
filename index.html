@@ -9,7 +9,6 @@ body{
     margin:0;
     background:#0f0f1a;
     overflow:hidden;
-    font-family:'Orbitron',sans-serif;
 }
 canvas{
     display:block;
@@ -29,18 +28,9 @@ canvas.width = 1200;
 canvas.height = 600;
 
 const FLOOR_Y = canvas.height - 100;
-
-// ============================
-// CONFIGURACIÓN BALANCEADA
-// ============================
-
-const speed = 11;           // velocidad horizontal
-const gravity = 1.3;        // gravedad firme
-const jumpForce = -24;      // salto alto real
-const spikeWidth = 70;
-const spikeHeight = 70;
-
-// ============================
+const SPEED = 8;
+const GRAVITY = 1.2;
+const JUMP_FORCE = -22;
 
 let player = {
     x: 250,
@@ -52,57 +42,47 @@ let player = {
     rotation: 0
 };
 
-let obstacles = [];
-let distanceCounter = 0;
-let nextSpawnDistance = 450;
+// NIVEL DISEÑADO (posiciones fijas)
+let level = [
+    {x: 900},
+    {x: 1300},
+    {x: 1700},
+    {x: 2000},
+    {x: 2400},        // doble spike
+    {x: 2500},
+    {x: 3000},
+    {x: 3600},
+    {x: 4200}
+];
 
+let obstacles = [];
+
+function buildLevel(){
+    for(let obj of level){
+        obstacles.push({
+            x: obj.x,
+            y: FLOOR_Y - 70,
+            width: 70,
+            height: 70
+        });
+    }
+}
+
+buildLevel();
+
+let cameraX = 0;
 let gameOver = false;
 let deathTimer = 0;
-
-// ============================
-// INPUT
-// ============================
 
 document.addEventListener("keydown", jump);
 document.addEventListener("mousedown", jump);
 
 function jump(){
     if(player.onGround && !gameOver){
-        player.velocityY = jumpForce;
+        player.velocityY = JUMP_FORCE;
         player.onGround = false;
     }
 }
-
-// ============================
-// SPAWN INTELIGENTE
-// ============================
-
-function spawnSpike(){
-
-    obstacles.push({
-        x: canvas.width + 50,
-        y: FLOOR_Y - spikeHeight,
-        width: spikeWidth,
-        height: spikeHeight
-    });
-
-    // 30% doble spike con separación correcta
-    if(Math.random() < 0.30){
-        obstacles.push({
-            x: canvas.width + 50 + 140,
-            y: FLOOR_Y - spikeHeight,
-            width: spikeWidth,
-            height: spikeHeight
-        });
-    }
-
-    // nueva distancia calculada en espacio real
-    nextSpawnDistance = 420 + Math.random() * 250;
-}
-
-// ============================
-// UPDATE
-// ============================
 
 function update(delta){
 
@@ -114,8 +94,10 @@ function update(delta){
         return;
     }
 
-    // Física vertical
-    player.velocityY += gravity * delta;
+    cameraX += SPEED * delta;
+
+    // Física
+    player.velocityY += GRAVITY * delta;
     player.y += player.velocityY * delta;
 
     if(player.y >= FLOOR_Y - player.height){
@@ -130,35 +112,20 @@ function update(delta){
         player.rotation = 0;
     }
 
-    // Movimiento obstáculos
+    // Colisión
     for(let obs of obstacles){
-        obs.x -= speed * delta;
+        let screenX = obs.x - cameraX;
 
-        // Colisión precisa
         if(
-            player.x < obs.x + obs.width - 8 &&
-            player.x + player.width - 8 > obs.x &&
+            player.x < screenX + obs.width - 10 &&
+            player.x + player.width - 10 > screenX &&
             player.y < obs.y + obs.height &&
             player.y + player.height > obs.y
         ){
             gameOver = true;
         }
     }
-
-    obstacles = obstacles.filter(o => o.x + o.width > -100);
-
-    // Spawn basado en distancia real recorrida
-    distanceCounter += speed * delta;
-
-    if(distanceCounter > nextSpawnDistance){
-        spawnSpike();
-        distanceCounter = 0;
-    }
 }
-
-// ============================
-// DRAW
-// ============================
 
 function drawBackground(){
     ctx.fillStyle = "#0f0f1a";
@@ -177,14 +144,16 @@ function drawPlayer(){
     ctx.restore();
 }
 
-function drawSpikes(){
+function drawObstacles(){
     ctx.fillStyle = "#ff2e63";
 
     for(let obs of obstacles){
+        let screenX = obs.x - cameraX;
+
         ctx.beginPath();
-        ctx.moveTo(obs.x, obs.y + obs.height);
-        ctx.lineTo(obs.x + obs.width/2, obs.y);
-        ctx.lineTo(obs.x + obs.width, obs.y + obs.height);
+        ctx.moveTo(screenX, obs.y + obs.height);
+        ctx.lineTo(screenX + obs.width/2, obs.y);
+        ctx.lineTo(screenX + obs.width, obs.y + obs.height);
         ctx.closePath();
         ctx.fill();
     }
@@ -192,27 +161,18 @@ function drawSpikes(){
 
 function draw(){
     drawBackground();
-    drawSpikes();
+    drawObstacles();
     drawPlayer();
 }
 
-// ============================
-// RESET
-// ============================
-
 function resetGame(){
-    obstacles = [];
-    distanceCounter = 0;
+    cameraX = 0;
     player.y = FLOOR_Y - player.height;
     player.velocityY = 0;
     player.rotation = 0;
     gameOver = false;
     deathTimer = 0;
 }
-
-// ============================
-// LOOP FLUIDO
-// ============================
 
 let lastTime = 0;
 
@@ -227,7 +187,6 @@ function loop(timestamp){
 }
 
 requestAnimationFrame(loop);
-
 </script>
 </body>
 </html>
